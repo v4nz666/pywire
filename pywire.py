@@ -48,6 +48,21 @@ class CellularAutomaton:
   def countDiagonals(self, include):
     self._countDiagonals = include
   
+  def resetState(self, state):
+    self._resetState = state
+  def resetCell(self, x, y):
+    self.cells[x][y].state = self._resetState
+  
+  def cycleState(self, x, y):
+    curState = self.cells[x][y].state
+    stateIndex = self.states.index(curState)
+    try:
+      newState = self.states[stateIndex + 1]
+    except:
+      newState = self.states[0]
+    
+    self.cells[x][y].state = newState
+    
   def update(self):
     self.updateConsole()
   
@@ -142,19 +157,13 @@ def processInput(ww):
   if mouse.lbutton_pressed:
     mx = mouse.cx
     my = mouse.cy
-    curState = ww.cells[mx][my].state
-    stateIndex = states.index(curState)
-    try:
-      newState = states[stateIndex + 1]
-    except:
-      newState = states[0]
+    ww.cycleState(mx, my)
     
-    ww.cells[mx][my].state = newState
   if mouse.rbutton_pressed:
     mx = mouse.cx
     my = mouse.cy
+    ww.resetCell(mx, my)
     
-    ww.cells[mx][my].state = offState
   
 ' INIT '
 CONSOLE_WIDTH = 80
@@ -204,6 +213,9 @@ states = [
 ' Main Loop '
 
 wireWorld = CellularAutomaton(CONSOLE_WIDTH, CONSOLE_HEIGHT, states)
+wireWorld.countDiagonals(True)
+wireWorld.resetState(offState)
+
 mouse = libtcod.Mouse()
 key = libtcod.Key()
 
