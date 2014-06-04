@@ -30,28 +30,29 @@ class Cell:
   def setState(self, state):
     self.state = state
 
-class CellularAutomaton:
+class Pyca:
   def __init__(self, width, height, states):
     self.width = width
     self.height = height
     self.console = libtcod.console_new(width, height)
     self.states = states
-    self.defaultState = states[0]
-    self.cells     = [[Cell(x, y, self.defaultState) for y in range(height)] for x in range(width)]
+    self._defaultState = states[0]
+    self.cells     = [[Cell(x, y, self._defaultState) for y in range(height)] for x in range(width)]
     
     self.frame = 0
     
     self._showFrame = True
     self._countDiagonals = True
+    
     print "CA: Done."
   
   def countDiagonals(self, include):
     self._countDiagonals = include
   
-  def resetState(self, state):
-    self._resetState = state
+  def defaultState(self, state):
+    self._defaultState = state
   def resetCell(self, x, y):
-    self.cells[x][y].state = self._resetState
+    self.cells[x][y].state = self._defaultState
   
   def cycleState(self, x, y):
     curState = self.cells[x][y].state
@@ -62,6 +63,7 @@ class CellularAutomaton:
       newState = self.states[0]
     
     self.cells[x][y].state = newState
+    return True
     
   def update(self):
     self.updateConsole()
@@ -79,7 +81,7 @@ class CellularAutomaton:
     return self.console
   
   def doTransition(self) :
-    nextCells = [[Cell(x, y, self.defaultState) for y in range(self.height)] for x in range(self.width)]
+    nextCells = [[Cell(x, y, self._defaultState) for y in range(self.height)] for x in range(self.width)]
     for x in range(self.width):
       for y in range(self.height):
         if self.cells[x][y].state.process:
@@ -121,6 +123,8 @@ class CellularAutomaton:
     
     return neighbours
 
+###### CA
+############
 
 def renderWires(ww):
   con = ww.getConsole()
@@ -145,7 +149,7 @@ def renderOverlay():
   libtcod.console_set_char_background(0, mouseX, mouseY, libtcod.lightest_lime, libtcod.BKGND_ADDALPHA(0.2))
 
 def processInput(ww):
-  global states, mouse, key, running
+  global states, mouse, key, running, drawingLine, drawingRect, x1, y1, x2, y2
   
   if key and key != libtcod.KEY_NONE:
     if key.vk == libtcod.KEY_ESCAPE:
@@ -153,15 +157,40 @@ def processInput(ww):
     elif key.vk == libtcod.KEY_SPACE:
       running = not running
   
-  #TODO move to CA - add lClick() and rClick()
+  mx = mouse.cx
+  my = mouse.cy
+  
   if mouse.lbutton_pressed:
-    mx = mouse.cx
-    my = mouse.cy
-    ww.cycleState(mx, my)
+    if key.shift:
+      drawingLine = not drawingLine
+      if drawingLine:
+        x1 = mx
+        y1 = my
+      else:
+        key.shift = False
+        x2 = mx
+        y2 = my
+        libtcod.line(x1,y1,x2,y2,ww.cycleState)
+    
+    elif key.lctrl or key.rctrl:
+      drawingRect = not drawingRect
+      if drawingRect:
+        x1 = mx
+        y1 = my
+      else:
+        key.lctrl = key.rctrl = False
+        x2 = mx
+        y2 = my
+        libtcod.line(x1, y1, x2, y1, ww.cycleState)
+        libtcod.line(x2, y1, x2, y2, ww.cycleState)
+        libtcod.line(x2, y2, x1, y2, ww.cycleState)
+        libtcod.line(x1, y2, x1, y1, ww.cycleState)
+        
+    
+    else:
+      ww.cycleState(mx, my)
     
   if mouse.rbutton_pressed:
-    mx = mouse.cx
-    my = mouse.cy
     ww.resetCell(mx, my)
     
   
@@ -179,7 +208,6 @@ running = False
 
 ' State definitions '
 offState = CellState('Off', libtcod.black)
-offState.process = False
 wireState = CellState('Wire', libtcod.gold)
 headState = CellState('Electron Head', libtcod.white)
 tailState = CellState('Electron Tail', libtcod.desaturated_blue)
@@ -199,6 +227,7 @@ def headTransition(neighbours):
 def tailTransition(neighbours):
   return wireState
 
+offState.process = False
 wireState.setTransition(wireTransition)
 headState.setTransition(headTransition)
 tailState.setTransition(tailTransition)
@@ -210,20 +239,31 @@ states = [
   tailState
 ]
 
-' Main Loop '
+' Main '
 
-wireWorld = CellularAutomaton(CONSOLE_WIDTH, CONSOLE_HEIGHT, states)
-wireWorld.countDiagonals(True)
-wireWorld.resetState(offState)
+wireWorld = Pyca(CONSOLE_WIDTH, CONSOLE_HEIGHT, states)
+
+wireWorld.countDiagonals(True)    # Include diagonal neighbours
+wireWorld.defaultState(offState)  # The state that resetCell() will set a cell to
 
 mouse = libtcod.Mouse()
 key = libtcod.Key()
+drawingLine = False
+drawingRect = False
+
+x1 = y1 = x2 = y2 = None
 
 while not libtcod.console_is_window_closed() :
   if running:
     wireWorld.doTransition()
   
-  libtcod.sys_check_for_event(libtcod.EVENT_MOUSE | libtcod.EVENT_KEY_PRESS,key,mouse)
+  libtcod.sys_check_for_event(
+    libtcod.EVENT_MOUSE |
+    libtcod.EVENT_MOUSE_MOVE |
+    libtcod.EVENT_KEY_PRESS,
+    key,
+    mouse
+  )
   
   libtcod.console_clear(0)
   processInput(wireWorld)
